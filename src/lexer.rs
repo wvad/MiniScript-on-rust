@@ -55,52 +55,47 @@ fn parse_as_integer<I: Iterator<Item = char>>(mut prefix: String, chars: &mut it
 #[inline(always)]
 fn read_numchars<I: Iterator<Item = char>>(chars: &mut iter::Peekable<I>, out: &mut String) {
     while let Some(c) = chars.peek() {
-        let c = *c as u32;
-        if c < 0x30 || 0x39 < c {
+        if !c.is_ascii_degit() {
             break;
         }
         out.push(chars.next().unwrap());
     }
 }
 
-#[inline(always)]
-fn get_second_item<I: Iterator + Clone>(iter: &I) -> Option<I::Item> {
-    let mut cloned = iter.clone();
-    match cloned.next() {
-        None => None,
-        _ => cloned.next()
+struct ParseState {
+    tokens: Vec<Token>,
+    pub line: usize,
+    pub column: usize,
+    pub filename: &str
+}
+
+impl ParseState {
+    fn push_token(&mut self, kind: TokenKind, text: String) {
+        let len = text.len();
+        state.tokens.push(Token {
+            kind,
+            text,
+            line: self.line,
+            column: self.column
+        });
+        self.column += len;
     }
 }
 
 pub fn parse(input: &str, filename: &str) -> Vec<Token> {
-    struct ParseState {
-        tokens: Vec<Token>,
-        line: usize,
-        column: usize
-    }
     let mut state = ParseState {
         tokens: Vec::new(),
         line: 1,
         column: 1
     };
     let mut input = input.chars().peekable();
-    let push_token = |state: &mut ParseState, kind: TokenKind, text: String| {
-        let len = text.len();
-        state.tokens.push(Token {
-            kind,
-            text,
-            line: state.line,
-            column: state.column
-        });
-        state.column += len;
-    };
     let show_error = |error: &str, state: &ParseState| -> ! {
         eprintln!("{}\n  at {}:{}:{}", error, filename, state.line, state.column);
         process::exit(1);
     };
     while let Some(c) = input.next() {
         match c {
-            '0' => push_token(&mut state, NumLiteral, match input.peek() {
+            '0' => state.push_token(NumLiteral, match input.peek() {
                 Some('x') => {
                     input.next();
                     parse_as_integer("0x".to_string(), &mut input, 16)
@@ -115,12 +110,12 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
                 },
                 Some('.') => {
                     let mut text = '0'.to_string();
-                    if let Some('0'..='9') = get_second_item(&input) {
+                    if let Some('0'..='9') = input.clone().nth(2) {
                         input.next();
                         text.push('.');
                         read_numchars(&mut input, &mut text);
                         if input.peek() == Some(&'e') {
-                            if let Some('1'..='9') = get_second_item(&input) {
+                            if let Some('1'..='9') = input.clone().nth(2) {
                                 input.next();
                                 text.push('e');
                                 read_numchars(&mut input, &mut text);
@@ -135,20 +130,20 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
                 let mut text = c.to_string();
                 read_numchars(&mut input, &mut text);
                 if input.peek() == Some(&'.') {
-                    if let Some('0'..='9') = get_second_item(&input) {
+                    if let Some('0'..='9') = input.clone().nth(2) {
                         input.next();
                         text.push('.');
                         read_numchars(&mut input, &mut text);
                     }
                 }
                 if input.peek() == Some(&'e') {
-                    if let Some('1'..='9') = get_second_item(&input) {
+                    if let Some('1'..='9') = input.clone().nth(2) {
                         input.next();
                         text.push('e');
                         read_numchars(&mut input, &mut text);
                     }
                 }
-                push_token(&mut state, NumLiteral, text);
+                state.push_token(NumLiteral, text);
             },
             '"' => {
                 let mut text = '"'.to_string();
@@ -167,7 +162,7 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
                     }
                 }
                 text.push('"');
-                push_token(&mut state, StrLiteral, text);
+                state.push_token(StrLiteral, text);
             },
             'a'..='z' | 'A'..='Z' | '_' => {
                 let mut text = c.to_string();
@@ -177,49 +172,49 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
                         _ => break
                     }
                 }
-                push_token(&mut state, Identifier, text);
+                state.push_token(Identifier, text);
             },
             '=' => if input.peek() == Some(&'=') {
-                push_token(&mut state, DoubleEqual, "==".to_string());
+                state.push_token(DoubleEqual, "==".to_string());
                 input.next();
             } else {
-                push_token(&mut state, SingleEqual, '='.to_string());
+                state.push_token(SingleEqual, '='.to_string());
             },
             '!' => if input.peek() == Some(&'=') {
-                push_token(&mut state, ExclEqual, "!=".to_string());
+                state.push_token(ExclEqual, "!=".to_string());
                 input.next();
             } else {
-                push_token(&mut state, Exclamation, '!'.to_string());
+                state.push_token(Exclamation, '!'.to_string());
             },
             '<' => if input.peek() == Some(&'=') {
-                push_token(&mut state, LessThanEq, "<=".to_string());
+                state.push_token(LessThanEq, "<=".to_string());
                 input.next();
             } else {
-                push_token(&mut state, LessThan, '<'.to_string());
+                state.push_token(LessThan, '<'.to_string());
             },
             '>' => if input.peek() == Some(&'=') {
-                push_token(&mut state, GreaterThanEq, ">=".to_string());
+                state.push_token(GreaterThanEq, ">=".to_string());
                 input.next();
             } else {
-                push_token(&mut state, GreaterThan, '>'.to_string());
+                state.push_token(GreaterThan, '>'.to_string());
             },
             '\n' => {
                 state.line += 1;
                 state.column = 1;
             },
-            '+' => push_token(&mut state, Plus, '+'.to_string()),
-            '-' => push_token(&mut state, Minus, '-'.to_string()),
-            '*' => push_token(&mut state, Asterisk, '*'.to_string()),
-            '/' => push_token(&mut state, Slash, '/'.to_string()),
-            '%' => push_token(&mut state, Percent, '%'.to_string()),
-            ';' => push_token(&mut state, SemiColon, ';'.to_string()),
-            '.' => push_token(&mut state, Dot, '.'.to_string()),
-            '(' => push_token(&mut state, LeftParen, '('.to_string()),
-            ')' => push_token(&mut state, RightParen, ')'.to_string()),
-            '{' => push_token(&mut state, LeftCurly, '{'.to_string()),
-            '}' => push_token(&mut state, RightCurly, '}'.to_string()),
-            '[' => push_token(&mut state, LeftBracket, '['.to_string()),
-            ']' => push_token(&mut state, RightBracket, ']'.to_string()),
+            '+' => state.push_token(Plus, '+'.to_string()),
+            '-' => state.push_token(Minus, '-'.to_string()),
+            '*' => state.push_token(Asterisk, '*'.to_string()),
+            '/' => state.push_token(Slash, '/'.to_string()),
+            '%' => state.push_token(Percent, '%'.to_string()),
+            ';' => state.push_token(SemiColon, ';'.to_string()),
+            '.' => state.push_token(Dot, '.'.to_string()),
+            '(' => state.push_token(LeftParen, '('.to_string()),
+            ')' => state.push_token(RightParen, ')'.to_string()),
+            '{' => state.push_token(LeftCurly, '{'.to_string()),
+            '}' => state.push_token(RightCurly, '}'.to_string()),
+            '[' => state.push_token(LeftBracket, '['.to_string()),
+            ']' => state.push_token(RightBracket, ']'.to_string()),
             ' ' | '\t' => state.column += 1,
             '\r' | '\0' => (),
             _ => show_error(&format!("CharacterError: Invalid character '{}'", c), &state)

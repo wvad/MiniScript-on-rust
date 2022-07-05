@@ -43,22 +43,16 @@ pub struct Token {
 
 #[inline(always)]
 fn parse_as_integer<I: Iterator<Item = char>>(mut prefix: String, chars: &mut iter::Peekable<I>, radix: u32) -> String {
-    while let Some(ch) = chars.peek() {
-        if !ch.is_digit(radix) {
-            break;
-        }
-        prefix.push(chars.next().unwrap());
+    while let Some(c) = chars.next_if(|c| c.is_digit(radix)) {
+        prefix.push(c);
     }
     prefix
 }
 
 #[inline(always)]
 fn read_numchars<I: Iterator<Item = char>>(chars: &mut iter::Peekable<I>, out: &mut String) {
-    while let Some(c) = chars.peek() {
-        if !c.is_ascii_degit() {
-            break;
-        }
-        out.push(chars.next().unwrap());
+    while let Some(c) = chars.next_if(|c| c.is_ascii_degit()) {
+        out.push(c);
     }
 }
 

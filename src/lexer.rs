@@ -90,40 +90,31 @@ fn read_numchars<I: Iterator<Item = char>>(chars: &mut iter::Peekable<I>, out: &
 }
 
 #[inline(always)]
+fn parse_int<I: Iterator<Item = char>>(chars: &mut iter::Peekable<I>, mut len_init: usize, radix: u32) -> TokenKind {
+    chars.next();
+    let mut val: f64 = 0.0;
+    while let Some(c) = chars.next_if(|c| c.is_digit(radix)) {
+        val *= radix as f64;
+        val += u8::from_str_radix(&c.to_string(), radix).unwrap() as f64;
+        len_init += 1;
+    }
+    TokenKind::new_num_literal(val, len_init)
+}
+
+#[inline(always)]
 fn parse_number_starting_with_0<I: Iterator<Item = char> + Clone>(chars: &mut iter::Peekable<I>) -> TokenKind {
     match chars.peek() {
         Some('x') => {
             chars.next();
-            let mut val: f64 = 0.0;
-            let mut len = 2;
-            while let Some(c) = chars.next_if(|c| ('0' <= *c && *c <= '9') || ('a' <= *c && *c <= 'f') || ('A' <= *c && *c <= 'F')) {
-                val *= 16.0;
-                val += u8::from_str_radix(&c.to_string(), 16).unwrap() as f64;
-                len += 1;
-            }
-            TokenKind::new_num_literal(val, len)
+            parse_int(chars, 2, 16)
         },
         Some('o') => {
             chars.next();
-            let mut val: f64 = 0.0;
-            let mut len = 2;
-            while let Some(c) = chars.next_if(|c| '0' <= *c && *c <= '7') {
-                val *= 8.0;
-                val += u8::from_str_radix(&c.to_string(), 8).unwrap() as f64;
-                len += 1;
-            }
-            TokenKind::new_num_literal(val, len)
+            parse_int(chars, 2, 8)
         },
         Some('b') => {
             chars.next();
-            let mut val: f64 = 0.0;
-            let mut len = 2;
-            while let Some(c) = chars.next_if(|c| '0' <= *c && *c <= '1') {
-                val *= 2.0;
-                val += u8::from_str_radix(&c.to_string(), 2).unwrap() as f64;
-                len += 1;
-            }
-            TokenKind::new_num_literal(val, len)
+            parse_int(chars, 2, 2)
         },
         Some('.') => {
             let mut text = '0'.to_string();

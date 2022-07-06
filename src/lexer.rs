@@ -51,7 +51,7 @@ fn parse_as_integer<I: Iterator<Item = char>>(mut prefix: String, chars: &mut it
 
 #[inline(always)]
 fn read_numchars<I: Iterator<Item = char>>(chars: &mut iter::Peekable<I>, out: &mut String) {
-    while let Some(c) = chars.next_if(|c| c.is_ascii_degit()) {
+    while let Some(c) = chars.next_if(|c| c.is_ascii_digit()) {
         out.push(c);
     }
 }
@@ -59,14 +59,15 @@ fn read_numchars<I: Iterator<Item = char>>(chars: &mut iter::Peekable<I>, out: &
 struct ParseState {
     tokens: Vec<Token>,
     pub line: usize,
-    pub column: usize,
-    pub filename: &str
+    pub column: usize
 }
 
 impl ParseState {
-    fn push_token(&mut self, kind: TokenKind, text: String) {
+    #[inline(always)]
+    fn push_token<S: ToString>(&mut self, kind: TokenKind, text: S) {
+        let text: String = text.to_string();
         let len = text.len();
-        state.tokens.push(Token {
+        self.tokens.push(Token {
             kind,
             text,
             line: self.line,
@@ -168,47 +169,39 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
                 }
                 state.push_token(Identifier, text);
             },
-            '=' => if input.peek() == Some(&'=') {
-                state.push_token(DoubleEqual, "==".to_string());
-                input.next();
-            } else {
-                state.push_token(SingleEqual, '='.to_string());
+            '=' => match input.next_if_eq(&'=') {
+                None => state.push_token(SingleEqual, '='),
+                _ => state.push_token(DoubleEqual, "==")
             },
-            '!' => if input.peek() == Some(&'=') {
-                state.push_token(ExclEqual, "!=".to_string());
-                input.next();
-            } else {
-                state.push_token(Exclamation, '!'.to_string());
+            '!' => match input.next_if_eq(&'=') {
+                None => state.push_token(ExclEqual, '!'),
+                _ => state.push_token(Exclamation, "!=")
             },
-            '<' => if input.peek() == Some(&'=') {
-                state.push_token(LessThanEq, "<=".to_string());
-                input.next();
-            } else {
-                state.push_token(LessThan, '<'.to_string());
+            '<' => match input.next_if_eq(&'=') {
+                None => state.push_token(LessThan, '<'),
+                _ => state.push_token(LessThanEq, "<="),
             },
-            '>' => if input.peek() == Some(&'=') {
-                state.push_token(GreaterThanEq, ">=".to_string());
-                input.next();
-            } else {
-                state.push_token(GreaterThan, '>'.to_string());
+            '>' => match input.next_if_eq(&'=') {
+                None => state.push_token(GreaterThan, '>'),
+                _ => state.push_token(GreaterThanEq, ">=")
             },
             '\n' => {
                 state.line += 1;
                 state.column = 1;
             },
-            '+' => state.push_token(Plus, '+'.to_string()),
-            '-' => state.push_token(Minus, '-'.to_string()),
-            '*' => state.push_token(Asterisk, '*'.to_string()),
-            '/' => state.push_token(Slash, '/'.to_string()),
-            '%' => state.push_token(Percent, '%'.to_string()),
-            ';' => state.push_token(SemiColon, ';'.to_string()),
-            '.' => state.push_token(Dot, '.'.to_string()),
-            '(' => state.push_token(LeftParen, '('.to_string()),
-            ')' => state.push_token(RightParen, ')'.to_string()),
-            '{' => state.push_token(LeftCurly, '{'.to_string()),
-            '}' => state.push_token(RightCurly, '}'.to_string()),
-            '[' => state.push_token(LeftBracket, '['.to_string()),
-            ']' => state.push_token(RightBracket, ']'.to_string()),
+            '+' => state.push_token(Plus, '+'),
+            '-' => state.push_token(Minus, '-'),
+            '*' => state.push_token(Asterisk, '*'),
+            '/' => state.push_token(Slash, '/'),
+            '%' => state.push_token(Percent, '%'),
+            ';' => state.push_token(SemiColon, ';'),
+            '.' => state.push_token(Dot, '.'),
+            '(' => state.push_token(LeftParen, '('),
+            ')' => state.push_token(RightParen, ')'),
+            '{' => state.push_token(LeftCurly, '{'),
+            '}' => state.push_token(RightCurly, '}'),
+            '[' => state.push_token(LeftBracket, '['),
+            ']' => state.push_token(RightBracket, ']'),
             ' ' | '\t' => state.column += 1,
             '\r' | '\0' => (),
             _ => show_error(&format!("CharacterError: Invalid character '{}'", c), &state)

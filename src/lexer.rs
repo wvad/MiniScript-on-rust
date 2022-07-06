@@ -59,15 +59,17 @@ impl TokenKind {
     pub fn new_num_literal(value: f64, str_len: usize) -> TokenKind {
         NumLiteral(NumLiteralData { value, str_len })
     }
-    pub fn try_into_float(value: String) -> Result<TokenKind, num::ParseFloatError> {
-        <f64 as str::FromStr>::from_str(&value).map(|n| Self::new_num_literal(n, value.len()))
+    pub fn try_into_float(value: &String) -> Result<TokenKind, num::ParseFloatError> {
+        <f64 as str::FromStr>::from_str(value).map(|n| Self::new_num_literal(n, value.len()))
     }
     pub fn get_str_len(&self) -> usize {
         match &self {
             StrLiteral(StrLiteralData { value, .. }) => value.len(),
             Identifier(IdentifierData { name, .. }) => name.len(),
             NumLiteral(NumLiteralData { str_len, .. }) => *str_len,
-            SingleEqual | SemiColon | Dot | LessThan | GreaterThan | Plus | Minus | Asterisk | Slash | Percent | LeftParen | RightParen | LeftCurly | RightCurly | LeftBracket | RightBracket | Exclamation => 1,
+            SingleEqual | SemiColon | LessThan | GreaterThan | Plus | Minus |
+            Asterisk | Slash | Percent | LeftParen | RightParen | LeftCurly |
+            Dot | RightCurly | LeftBracket | RightBracket | Exclamation => 1,
             DoubleEqual |  ExclEqual |  LessThanEq |  GreaterThanEq => 2
         }
     }
@@ -137,7 +139,7 @@ fn parse_number_starting_with_0<I: Iterator<Item = char> + Clone>(chars: &mut it
                     }
                 }
             }
-            TokenKind::try_into_float(text)
+            TokenKind::try_into_float(&text)
             .expect("Invalid float literal")
         },
         _ => TokenKind::new_num_literal(0., 1)
@@ -196,7 +198,7 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
                         read_numchars(&mut input, &mut text);
                     }
                 }
-                state.push_token(TokenKind::try_into_float(text).expect("Invalid float literal"));
+                state.push_token(TokenKind::try_into_float(&text).expect("Invalid float literal"));
             },
             '"' => {
                 let mut text = '"'.to_string();

@@ -60,13 +60,14 @@ impl TokenKind {
         NumLiteral(NumLiteralData { value, str_len })
     }
     pub fn try_into_float(value: &String) -> Result<TokenKind, num::ParseFloatError> {
-        <f64 as str::FromStr>::from_str(value).map(|n| Self::new_num_literal(n, value.len()))
+        <f64 as str::FromStr>::from_str(value)
+        .map(|n| Self::new_num_literal(n, value.len()))
     }
     pub fn get_str_len(&self) -> usize {
         match &self {
-            StrLiteral(StrLiteralData { value, .. }) => value.len(),
-            Identifier(IdentifierData { name, .. }) => name.len(),
-            NumLiteral(NumLiteralData { str_len, .. }) => *str_len,
+            StrLiteral(s) => s.value.len(),
+            Identifier(id) => id.name.len(),
+            NumLiteral(num) => num.str_len,
             SingleEqual | SemiColon | LessThan | GreaterThan | Plus | Minus |
             Asterisk | Slash | Percent | LeftParen | RightParen | LeftCurly |
             Dot | RightCurly | LeftBracket | RightBracket | Exclamation => 1,
@@ -90,7 +91,11 @@ fn read_numchars<I: Iterator<Item = char>>(chars: &mut iter::Peekable<I>, out: &
 }
 
 #[inline(always)]
-fn parse_int<I: Iterator<Item = char>>(chars: &mut iter::Peekable<I>, mut len_init: usize, radix: u32) -> TokenKind {
+fn parse_int_with_prefix<I>(chars: &mut iter::Peekable<I>, mut len_init: usize, radix: u32) -> TokenKind
+    where I: Iterator<Item = char> + Clone {
+    if let Some('0'..='9') = chars.clone().nth(1) {} else {
+        return TokenKind::new_num_literal(0., 1)
+    }
     chars.next();
     let mut val: f64 = 0.0;
     while let Some(c) = chars.next_if(|c| c.is_digit(radix)) {
@@ -102,20 +107,12 @@ fn parse_int<I: Iterator<Item = char>>(chars: &mut iter::Peekable<I>, mut len_in
 }
 
 #[inline(always)]
-fn parse_number_starting_with_0<I: Iterator<Item = char> + Clone>(chars: &mut iter::Peekable<I>) -> TokenKind {
+fn parse_number_starting_with_0<I>(chars: &mut iter::Peekable<I>) -> TokenKind
+    where I: Iterator<Item = char> + Clone {
     match chars.peek() {
-        Some('x') => {
-            chars.next();
-            parse_int(chars, 2, 16)
-        },
-        Some('o') => {
-            chars.next();
-            parse_int(chars, 2, 8)
-        },
-        Some('b') => {
-            chars.next();
-            parse_int(chars, 2, 2)
-        },
+        Some('x') => parse_int_with_prefix(chars, 2, 16),
+        Some('o') => parse_int_with_prefix(chars, 2, 8),
+        Some('b') => parse_int_with_prefix(chars, 2, 2),
         Some('.') => {
             let mut text = '0'.to_string();
             if let Some('0'..='9') = chars.clone().nth(1) {

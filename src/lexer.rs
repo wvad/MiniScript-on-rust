@@ -209,11 +209,11 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
             },
             'a'..='z' | 'A'..='Z' | '_' => {
                 let mut text = c.to_string();
-                while let Some(c) = input.peek() {
-                    match c {
-                        'a'..='z' | 'A'..='Z' | '_' | '0'..='9' => text.push(input.next().unwrap()),
-                        _ => break
-                    }
+                while let Some(c) = input.next_if(|c| match c {
+                    'a'..='z' | 'A'..='Z' | '_' | '0'..='9' => true,
+                    _ => false
+                }) {
+                    text.push(c);
                 }
                 state.push_token(TokenKind::new_identifier(text));
             },

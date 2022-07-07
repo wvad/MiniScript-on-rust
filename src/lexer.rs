@@ -225,8 +225,8 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
                 _ => DoubleEqual
             }),
             '!' => state.push_token(match input.next_if_eq(&'=') {
-                None => ExclEqual,
-                _ => Exclamation
+                None => Exclamation,
+                _ => ExclEqual
             }),
             '<' => state.push_token(match input.next_if_eq(&'=') {
                 None => LessThan,
@@ -254,7 +254,7 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
             '[' => state.push_token(LeftBracket),
             ']' => state.push_token(RightBracket),
             ' ' | '\t' => state.column += 1,
-            '\r' | '\0' => (),
+            '\r' => (),
             _ => show_error(&format!("CharacterError: Invalid character '{}'", c), &state)
         }
     }

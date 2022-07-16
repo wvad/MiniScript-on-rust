@@ -1,6 +1,5 @@
-use std::*;
 use TokenKind::*;
-use std::collections::VecDeque;
+use std::{str::FromStr, collections::VecDeque, num::ParseFloatError, iter::Peekable};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NumLiteralData {
@@ -51,8 +50,8 @@ impl TokenKind {
     fn new_num_literal(value: f64, str_len: usize) -> TokenKind {
         NumLiteral(NumLiteralData { value, str_len })
     }
-    fn try_into_float(value: &String) -> Result<TokenKind, num::ParseFloatError> {
-        <f64 as str::FromStr>::from_str(value)
+    fn try_into_float(value: &String) -> Result<TokenKind, ParseFloatError> {
+        <f64 as FromStr>::from_str(value)
         .map(|n| Self::new_num_literal(n, value.len()))
     }
     pub fn get_str_len(&self) -> usize {
@@ -77,14 +76,14 @@ pub struct Token {
 }
 
 #[inline(always)]
-fn read_numchars<I: Iterator<Item = char>>(chars: &mut iter::Peekable<I>, out: &mut String) {
+fn read_numchars<I: Iterator<Item = char>>(chars: &mut Peekable<I>, out: &mut String) {
     while let Some(c) = chars.next_if(|c| c.is_ascii_digit()) {
         out.push(c);
     }
 }
 
 #[inline(always)]
-fn parse_int_with_prefix<I>(chars: &mut iter::Peekable<I>, mut len_init: usize, radix: u32) -> TokenKind
+fn parse_int_with_prefix<I>(chars: &mut Peekable<I>, mut len_init: usize, radix: u32) -> TokenKind
     where I: Iterator<Item = char> + Clone {
     if let Some('0'..='9') = chars.clone().nth(1) {} else {
         return TokenKind::new_num_literal(0., 1)
@@ -100,7 +99,7 @@ fn parse_int_with_prefix<I>(chars: &mut iter::Peekable<I>, mut len_init: usize, 
 }
 
 #[inline(always)]
-fn parse_number_starting_with_0<I>(chars: &mut iter::Peekable<I>) -> Result<TokenKind, num::ParseFloatError>
+fn parse_number_starting_with_0<I>(chars: &mut Peekable<I>) -> Result<TokenKind, ParseFloatError>
     where I: Iterator<Item = char> + Clone {
     Ok(match chars.peek() {
         Some('x') => parse_int_with_prefix(chars, 2, 16),

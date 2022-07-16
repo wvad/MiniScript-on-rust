@@ -1,5 +1,5 @@
 use crate::lexer::{Token, TokenKind};
-use std::{collections::VecDeque, fmt};
+use std::{collections::VecDeque, fmt::{Debug, Formatter, Result as FormatResult}};
 use Expression::*;
 
 type ExprPtr = Box<Expression>;
@@ -36,8 +36,8 @@ impl Expression {
     }
 }
 
-impl fmt::Debug for Expression {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Debug for Expression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FormatResult {
         match self {
             StringValue(s) => write!(f, "{}", s),
             NumberValue(n) => write!(f, "{}", n),

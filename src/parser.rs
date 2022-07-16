@@ -1,10 +1,9 @@
 use crate::lexer::{Token, TokenKind};
-use std::collections::VecDeque;
+use std::{collections::VecDeque, fmt};
 use Expression::*;
 
 type ExprPtr = Box<Expression>;
 
-#[derive(Debug)]
 pub enum Expression {
   StringValue(String),
   NumberValue(f64),
@@ -34,6 +33,35 @@ impl Expression {
   #[inline(always)]
   fn boxing(self) -> ExprPtr {
     Box::new(self)
+  }
+}
+
+impl fmt::Debug for Expression {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      StringValue(s) => write!(f, "{}", s),
+      NumberValue(n) => write!(f, "{}", n),
+      Variable(s) => write!(f, "var({})", s),
+      MemberAccess(left, right) => write!(f, "access({:?}, {:?})", left, right),
+      FunctionCall(left, right) => write!(f, "call({:?}, {:?})", left, right),
+      LogicalNot(left) => write!(f, "not({:?})", left),
+      UnaryNegation(left) => write!(f, "minus({:?})", left),
+      Typeof(left) => write!(f, "type({:?})", left),
+      Multiplication(left, right) => write!(f, "mul({:?}, {:?})", left, right),
+      Division(left, right) => write!(f, "div({:?}, {:?})", left, right),
+      Remainder(left, right) => write!(f, "rem({:?}, {:?})", left, right),
+      Addition(left, right) => write!(f, "add({:?}, {:?})", left, right),
+      Subtraction(left, right) => write!(f, "sub({:?}, {:?})", left, right),
+      LessThan(left, right) => write!(f, "lt({:?}, {:?})", left, right),
+      LessThanEq(left, right) => write!(f, "le({:?}, {:?})", left, right),
+      GreaterThan(left, right) => write!(f, "gt({:?}, {:?})", left, right),
+      GreaterThanEq(left, right) => write!(f, "ge({:?}, {:?})", left, right),
+      Equality(left, right) => write!(f, "eq({:?}, {:?})", left, right),
+      Inequality(left, right) => write!(f, "nq({:?}, {:?})", left, right),
+      LogicalAnd(left, right) => write!(f, "and({:?}, {:?})", left, right),
+      LogicalOr(left, right) => write!(f, "or({:?}, {:?})", left, right),
+      Assignment(left, right) => write!(f, "asin({:?}, {:?})", left, right)
+    }
   }
 }
 

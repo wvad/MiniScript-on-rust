@@ -6,9 +6,12 @@ fn main() {
     let mut tokens = match lexer::parse(&input) {
         Ok(tokens) => tokens,
         Err(e) => {
-            println!("{:?}", e);
+            eprintln!("Failed: {:?}", e);
             return;
         }
     };
-    println!("{:?}", parser::parse_expression(&mut tokens));
+    match parser::parse_expression(&mut tokens) {
+        Ok(expr) => println!("Parsed: {:?}", expr),
+        Err(e) => eprintln!("Failed: {:?}", e),
+    }
 }

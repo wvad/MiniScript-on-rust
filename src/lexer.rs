@@ -1,15 +1,6 @@
 use std::*;
 use TokenKind::*;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IdentifierData {
-    pub name: String
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StrLiteralData {
-    pub value: String
-}
+use std::collections::VecDeque;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NumLiteralData {
@@ -19,16 +10,20 @@ pub struct NumLiteralData {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
-    Identifier(IdentifierData),
+    Identifier(String),
 
     // Literals
-    StrLiteral(StrLiteralData),
+    StrLiteral(String),
     NumLiteral(NumLiteralData),
+
+    // keywords
+    TypeofKeyword,
 
     // Operators and Symbols
     SingleEqual,
     SemiColon,
     Dot,
+    Comma,
     DoubleEqual,
     ExclEqual,
     LessThan,
@@ -46,32 +41,30 @@ pub enum TokenKind {
     RightCurly,
     LeftBracket,
     RightBracket,
-    Exclamation
+    Exclamation,
+    DoubleAnd,
+    DoublePipe
 }
 
 impl TokenKind {
-    pub fn new_identifier(name: String) -> TokenKind {
-        Identifier(IdentifierData { name })
-    }
-    pub fn new_str_literal(value: String) -> TokenKind {
-        StrLiteral(StrLiteralData { value })
-    }
-    pub fn new_num_literal(value: f64, str_len: usize) -> TokenKind {
+    #[inline(always)]
+    fn new_num_literal(value: f64, str_len: usize) -> TokenKind {
         NumLiteral(NumLiteralData { value, str_len })
     }
-    pub fn try_into_float(value: &String) -> Result<TokenKind, num::ParseFloatError> {
+    fn try_into_float(value: &String) -> Result<TokenKind, num::ParseFloatError> {
         <f64 as str::FromStr>::from_str(value)
         .map(|n| Self::new_num_literal(n, value.len()))
     }
     pub fn get_str_len(&self) -> usize {
-        match &self {
-            StrLiteral(s) => s.value.len(),
-            Identifier(id) => id.name.len(),
+        match self {
+            StrLiteral(s) => s.len(),
+            Identifier(id) => id.len(),
             NumLiteral(num) => num.str_len,
             SingleEqual | SemiColon | LessThan | GreaterThan | Plus | Minus |
             Asterisk | Slash | Percent | LeftParen | RightParen | LeftCurly |
-            Dot | RightCurly | LeftBracket | RightBracket | Exclamation => 1,
-            DoubleEqual |  ExclEqual |  LessThanEq |  GreaterThanEq => 2
+            Dot | RightCurly | LeftBracket | RightBracket | Exclamation | Comma => 1,
+            DoubleEqual | ExclEqual | LessThanEq | GreaterThanEq | DoubleAnd | DoublePipe => 2,
+            TypeofKeyword => 6
         }
     }
 }
@@ -107,9 +100,9 @@ fn parse_int_with_prefix<I>(chars: &mut iter::Peekable<I>, mut len_init: usize, 
 }
 
 #[inline(always)]
-fn parse_number_starting_with_0<I>(chars: &mut iter::Peekable<I>) -> TokenKind
+fn parse_number_starting_with_0<I>(chars: &mut iter::Peekable<I>) -> Result<TokenKind, num::ParseFloatError>
     where I: Iterator<Item = char> + Clone {
-    match chars.peek() {
+    Ok(match chars.peek() {
         Some('x') => parse_int_with_prefix(chars, 2, 16),
         Some('o') => parse_int_with_prefix(chars, 2, 8),
         Some('b') => parse_int_with_prefix(chars, 2, 2),
@@ -127,30 +120,30 @@ fn parse_number_starting_with_0<I>(chars: &mut iter::Peekable<I>) -> TokenKind
                     }
                 }
             }
-            TokenKind::try_into_float(&text)
-            .expect("Invalid float literal")
+            TokenKind::try_into_float(&text)?
         },
         _ => TokenKind::new_num_literal(0., 1)
-    }
+    })
 }
 
-struct ParseState {
-    tokens: Vec<Token>,
-    line: usize,
-    column: usize
+#[derive(Debug)]
+pub struct ParseState {
+    tokens: VecDeque<Token>,
+    pub line: usize,
+    pub column: usize
 }
 
 impl ParseState {
     fn new() -> Self {
         Self {
-            tokens: Vec::new(),
+            tokens: VecDeque::new(),
             line: 1,
             column: 1
         }
     }
     fn push_token(&mut self, kind: TokenKind) {
         let len = kind.get_str_len();
-        self.tokens.push(Token {
+        self.tokens.push_back(Token {
             kind,
             line: self.line,
             column: self.column
@@ -159,16 +152,37 @@ impl ParseState {
     }
 }
 
-pub fn parse(input: &str, filename: &str) -> Vec<Token> {
+#[derive(Debug)]
+pub enum LexerErrorKind {
+    InvalidFloatLiteral,
+    InvalidStringEscapeSequence,
+    UnterminatedStringLiteral,
+    InvalidCharacter(char)
+}
+
+#[derive(Debug)]
+pub struct LexerError {
+    pub state: ParseState,
+    pub kind: LexerErrorKind
+}
+
+impl LexerError {    
+    fn new(state: ParseState, kind: LexerErrorKind) -> Self {
+        Self { state, kind }
+    }
+}
+
+pub fn parse(input: &str) -> Result<VecDeque<Token>, LexerError> {
     let mut state = ParseState::new();
     let mut input = input.chars().peekable();
-    let show_error = |error: &str, state: &ParseState| -> ! {
-        eprintln!("{}\n  at {}:{}:{}", error, filename, state.line, state.column);
-        process::exit(1);
-    };
     while let Some(c) = input.next() {
         match c {
-            '0' => state.push_token(parse_number_starting_with_0(&mut input)),
+            '0' => state.push_token(
+                match parse_number_starting_with_0(&mut input) {
+                    Ok(t) => t,
+                    _ => return Err(LexerError::new(state, LexerErrorKind::InvalidFloatLiteral))
+                }
+            ),
             '1'..='9' => {
                 let mut text = c.to_string();
                 read_numchars(&mut input, &mut text);
@@ -197,15 +211,15 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
                                 text.push('\\');
                                 text.push(input.next().unwrap());
                             },
-                            _ => show_error("LiteralError: Invalid escape sequence", &state)
+                            _ => return Err(LexerError::new(state, LexerErrorKind::InvalidStringEscapeSequence))
                         },
-                        '\n' => show_error("LiteralError: Unterminated string literal", &state),
+                        '\n' => return Err(LexerError::new(state, LexerErrorKind::UnterminatedStringLiteral)),
                         '"' => break,
                         _ => text.push(c)
                     }
                 }
                 text.push('"');
-                state.push_token(TokenKind::new_str_literal(text));
+                state.push_token(StrLiteral(text));
             },
             'a'..='z' | 'A'..='Z' | '_' => {
                 let mut text = c.to_string();
@@ -215,7 +229,10 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
                 }) {
                     text.push(c);
                 }
-                state.push_token(TokenKind::new_identifier(text));
+                state.push_token(match text.as_str() {
+                    "typeof" => TypeofKeyword,
+                    _ => Identifier(text)
+                });
             },
             '=' => state.push_token(match input.next_if_eq(&'=') {
                 None => SingleEqual,
@@ -244,6 +261,7 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
             '%' => state.push_token(Percent),
             ';' => state.push_token(SemiColon),
             '.' => state.push_token(Dot),
+            ',' => state.push_token(Comma),
             '(' => state.push_token(LeftParen),
             ')' => state.push_token(RightParen),
             '{' => state.push_token(LeftCurly),
@@ -252,8 +270,20 @@ pub fn parse(input: &str, filename: &str) -> Vec<Token> {
             ']' => state.push_token(RightBracket),
             ' ' | '\t' => state.column += 1,
             '\r' => (),
-            _ => show_error(&format!("CharacterError: Invalid character '{}'", c), &state)
+            '&' => if let Some(_) = input.next_if_eq(&'&') {
+                    input.next();
+                    state.push_token(DoublePipe);
+                } else {
+                    return Err(LexerError::new(state, LexerErrorKind::InvalidCharacter(c)))
+                },
+            '|' => if let Some(_) = input.next_if_eq(&'|') {
+                    input.next();
+                    state.push_token(DoubleAnd);
+                } else {
+                    return Err(LexerError::new(state, LexerErrorKind::InvalidCharacter(c)))
+                },
+            _ => return Err(LexerError::new(state, LexerErrorKind::InvalidCharacter(c)))
         }
     }
-    state.tokens
+    Ok(state.tokens)
 }
